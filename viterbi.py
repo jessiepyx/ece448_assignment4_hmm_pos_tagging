@@ -3,6 +3,7 @@ This is the main entry point for MP4. You should only modify code
 within this file -- the unrevised staff files will be used for all other
 files and classes when code is run, so be careful to not modify anything else.
 """
+import math
 
 
 def baseline(train, test):
@@ -51,10 +52,11 @@ def viterbi_p1(train, test):
             E.g. [[(word1, tag1), (word2, tag2)...], [(word1, tag1), (word2, tag2)...]...]
     """
 
-    laplace_smooth = 1
+    laplace_smooth = 1e-5
     tags = set()
     cnt_tag = dict()
     cnt_tag_start = dict()
+    cnt_tag_end = dict()
     cnt_tag_pair = dict()
     cnt_tag_word = dict()
     vocabulary = set()
@@ -68,6 +70,9 @@ def viterbi_p1(train, test):
                 val = cnt_tag_start.get(tag, 0)
                 cnt_tag_start[tag] = val + 1
             else:
+                if k == len(sentence) - 1:
+                    val = cnt_tag_end.get(tag, 0)
+                    cnt_tag_end[tag] = val + 1
                 prev_tag = sentence[k - 1][1]
                 val = cnt_tag_pair.get((prev_tag, tag), 0)
                 cnt_tag_pair[(prev_tag, tag)] = val + 1
@@ -76,28 +81,31 @@ def viterbi_p1(train, test):
             vocabulary.add(word)
 
     # Initial probability
-    initial_p = dict()
+    log_initial_p = dict()
     num_of_starting_position = sum(cnt_tag_start.values())
     for tag in tags:
-        initial_p[tag] = (cnt_tag_start.get(tag, 0) + laplace_smooth) / (
-                num_of_starting_position + laplace_smooth * len(tags))
+        log_initial_p[tag] = math.log(
+            (cnt_tag_start.get(tag, 0) + laplace_smooth) / (
+                    num_of_starting_position + laplace_smooth * len(tags)))
 
     # Transition probability
-    transition_p = dict()
+    log_transition_p = dict()
     for tag_prev in tags:
         for tag_curr in tags:
-            transition_p[(tag_prev, tag_curr)] = (cnt_tag_pair.get((tag_prev, tag_curr), 0) + laplace_smooth) / (
-                    cnt_tag[tag_prev] + laplace_smooth * len(tags))
+            log_transition_p[(tag_prev, tag_curr)] = math.log(
+                (cnt_tag_pair.get((tag_prev, tag_curr), 0) + laplace_smooth) / (
+                        cnt_tag[tag_prev] - cnt_tag_end.get(tag_prev, 0) + laplace_smooth * len(tags)))
 
     # Emission probability
-    emission_p = dict()
+    log_emission_p = dict()
     for sentence in test:
         for word in sentence:
             vocabulary.add(word)
     for tag in tags:
         for word in vocabulary:
-            emission_p[(tag, word)] = (cnt_tag_word.get((tag, word), 0) + laplace_smooth) / (
-                    len(tags) + laplace_smooth * len(vocabulary))
+            log_emission_p[(tag, word)] = math.log(
+                (cnt_tag_word.get((tag, word), 0) + laplace_smooth) / (
+                        cnt_tag[tag] + laplace_smooth * len(vocabulary)))
 
     predicts = []
     for sentence in test:
@@ -108,15 +116,15 @@ def viterbi_p1(train, test):
             if k == 0:
                 curr = dict()
                 for tag_curr in tags:
-                    curr[tag_curr] = initial_p[tag_curr] * emission_p[(tag_curr, word)]
+                    curr[tag_curr] = log_initial_p[tag_curr] + log_emission_p[(tag_curr, word)]
                 trellis.append(curr)
             else:
                 prev = trellis[-1]
                 curr = dict()
                 for tag_curr in tags:
                     for tag_prev in tags:
-                        nodes_edges[(tag_prev, tag_curr)] = prev[tag_prev] * transition_p[
-                            (tag_prev, tag_curr)] * emission_p[(tag_curr, word)]
+                        nodes_edges[(tag_prev, tag_curr)] = prev[tag_prev] + log_transition_p[
+                            (tag_prev, tag_curr)] + log_emission_p[(tag_curr, word)]
                     select_tag_prev = max(tags, key=lambda x: nodes_edges[(x, tag_curr)])
                     curr[tag_curr] = nodes_edges[(select_tag_prev, tag_curr)]
                     path[(k, tag_curr)] = select_tag_prev
@@ -125,7 +133,7 @@ def viterbi_p1(train, test):
         res = [(sentence[-1], tag)]
         for k in range(len(sentence) - 1, 0, -1):
             tag = path[(k, tag)]
-            res.insert(0, (sentence[k-1], tag))
+            res.insert(0, (sentence[k - 1], tag))
         predicts.append(res[:])
 
     return predicts
