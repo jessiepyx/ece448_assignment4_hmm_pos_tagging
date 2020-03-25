@@ -1,6 +1,8 @@
 from collections import defaultdict
 import math
-def extra(train,test):
+
+
+def extra(train, test):
     '''
     TODO: implement improved viterbi algorithm for extra credits.
     input:  training data (list of sentences, with tags on the words)
@@ -48,14 +50,18 @@ def extra(train,test):
 
     # Hapax probability
     hapax_p = dict()
+    # dump = []
     for (word, times) in cnt_word.items():
         if times == 1:
             tag = list(cnt_word_tag[word].keys())[0]
             val = cnt_tag_hapax.get(tag, 0)
             cnt_tag_hapax[tag] = val + 1
+            # dump.append(tag + ' ' + word)
     for tag in tags:
         hapax_p[tag] = (cnt_tag_hapax.get(tag, 0) + laplace_smooth) / (
                 sum(cnt_tag_hapax.values()) + laplace_smooth * len(tags))
+    # f = open('data/hapax_dump.txt', 'w+')
+    # f.write('\n'.join(sorted(dump)))
 
     # Initial probability
     log_initial_p = dict()
@@ -91,6 +97,14 @@ def extra(train,test):
                 laplace_smooth * hapax_p[tag] / (
                         cnt_tag[tag] + laplace_smooth * (len(vocabulary) + total_occurrence_unseen)))
 
+    numbers = [
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+        'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+        'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen',
+        'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety',
+        'hundred', 'thousand', 'million', 'billion', 'trillion',
+    ]
+
     predicts = []
     for sentence in test:
         trellis = []
@@ -118,6 +132,51 @@ def extra(train,test):
         for k in range(len(sentence) - 1, 0, -1):
             tag = path[(k, tag)]
             res.insert(0, (sentence[k - 1], tag))
+        for k in range(len(res)):
+            word = res[k][0]
+            if word in unseen:
+                if '$' in word:
+                    res[k] = (word, 'NOUN')
+                elif len(word) > 2 and word[-2:] == "'s":
+                    res[k] = (word, 'NOUN')
+                elif len(word) > 3 and word[-3:] == 'ist':
+                    res[k] = (word, 'NOUN')
+                elif len(word) > 2 and word[-2:] == 'ty':
+                    res[k] = (word, 'NOUN')
+                elif len(word) > 3 and word[-3:] == 'ter':
+                    res[k] = (word, 'NOUN')
+                elif len(word) > 3 and word[-2:] == 'tor':
+                    res[k] = (word, 'NOUN')
+                elif len(word) > 4 and word[-3:] == 'ists':
+                    res[k] = (word, 'NOUN')
+                elif len(word) > 3 and word[-2:] == 'ties':
+                    res[k] = (word, 'NOUN')
+                elif len(word) > 4 and word[-4:] == 'ters':
+                    res[k] = (word, 'NOUN')
+                elif len(word) > 4 and word[-4:] == 'tors':
+                    res[k] = (word, 'NOUN')
+                elif len(word) > 3 and word[-3:] == 'ism':
+                    res[k] = (word, 'NOUN')
+                elif len(word) > 2 and word[-2:] == 'ly':
+                    res[k] = (word, 'ADV')
+                elif len(word) > 3 and word[-3:] == 'ble':
+                    res[k] = (word, 'ADJ')
+                elif len(word) > 3 and word[-3:] == 'ful':
+                    res[k] = (word, 'ADJ')
+                elif '-' in word and len(word) > 2 and word[-2:] == 'ed':
+                    res[k] = (word, 'ADJ')
+                elif '-' in word and len(word) > 3 and word[-3:] == 'ing':
+                    res[k] = (word, 'ADJ')
+                elif '-' in word and res[k][1] != 'ADJ':
+                    res[k] = (word, 'NOUN')
+                elif len(word) > 2 and word[-2:] == 'al':
+                    res[k] = (word, 'ADJ')
+                elif len(word) > 3 and word[-3:] == 'ing':
+                    res[k] = (word, 'VERB')
+                elif len(word) > 2 and word[-2:] == 'ed':
+                    res[k] = (word, 'VERB')
+                elif any(substring in numbers for substring in word):
+                    res[k] = (word, 'NUM')
         predicts.append(res[:])
 
     return predicts
