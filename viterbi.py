@@ -156,7 +156,7 @@ def viterbi_p2(train, test):
     cnt_tag_start = dict()
     cnt_tag_end = dict()
     cnt_tag_pair = dict()
-    cnt_tag_word = dict()
+    cnt_word_tag = dict()
     vocabulary = set()
     cnt_word = dict()
     cnt_tag_hapax = dict()
@@ -176,21 +176,25 @@ def viterbi_p2(train, test):
                 prev_tag = sentence[k - 1][1]
                 val = cnt_tag_pair.get((prev_tag, tag), 0)
                 cnt_tag_pair[(prev_tag, tag)] = val + 1
-            val = cnt_tag_word.get((tag, word), 0)
-            cnt_tag_word[(tag, word)] = val + 1
+            if word in cnt_word_tag:
+                val = cnt_word_tag[word].get(tag, 0)
+                cnt_word_tag[word][tag] = val + 1
+            else:
+                cnt_word_tag[word] = {tag: 1}
             vocabulary.add(word)
             val = cnt_word.get(word, 0)
             cnt_word[word] = val + 1
-    
+
     # Hapax probability
     hapax_p = dict()
     for (word, times) in cnt_word.items():
         if times == 1:
-            tag = [x for (x, word) in cnt_tag_word.keys()][0]
+            tag = list(cnt_word_tag[word].keys())[0]
             val = cnt_tag_hapax.get(tag, 0)
             cnt_tag_hapax[tag] = val + 1
     for tag in tags:
-        hapax_p[tag] = (cnt_tag_hapax.get(tag, 0) + laplace_smooth) / (sum(cnt_tag_hapax.values()) + laplace_smooth * len(tags))
+        hapax_p[tag] = (cnt_tag_hapax.get(tag, 0) + laplace_smooth) / (
+                sum(cnt_tag_hapax.values()) + laplace_smooth * len(tags))
 
     # Initial probability
     log_initial_p = dict()
@@ -219,18 +223,12 @@ def viterbi_p2(train, test):
         total_occurrence_unseen = hapax_p[tag] * len(unseen)
         for word in vocabulary:
             log_emission_p[(tag, word)] = math.log(
-                (cnt_tag_word.get((tag, word), 0) + laplace_smooth) / (
+                (cnt_word_tag[word].get(tag, 0) + laplace_smooth) / (
                         cnt_tag[tag] + laplace_smooth * (len(vocabulary) + total_occurrence_unseen)))
-            # log_emission_p[(tag, word)] = (cnt_tag_word.get((tag, word), 0) + laplace_smooth) / (
-            #             cnt_tag[tag] + laplace_smooth * (len(vocabulary) + total_occurrence_unseen))
         for word in unseen:
             log_emission_p[(tag, word)] = math.log(
-                (cnt_tag_word.get((tag, word), 0) + laplace_smooth * hapax_p[tag]) / (
+                laplace_smooth * hapax_p[tag] / (
                         cnt_tag[tag] + laplace_smooth * (len(vocabulary) + total_occurrence_unseen)))
-            # log_emission_p[(tag, word)] = (cnt_tag_word.get((tag, word), 0) + laplace_smooth * hapax_p[tag]) / (
-            #             cnt_tag[tag] + laplace_smooth * (len(vocabulary) + total_occurrence_unseen))
-    # for tag in tags:
-        # print(sum(log_emission_p[(tag, word)] for word in vocabulary) + sum(log_emission_p[(tag, word)] for word in unseen))
 
     predicts = []
     for sentence in test:
